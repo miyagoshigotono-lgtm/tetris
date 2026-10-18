@@ -1,0 +1,9 @@
+{
+  "name": "block-otoshi",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "icons": "node tools/make-icons.js"
+  }
+}
