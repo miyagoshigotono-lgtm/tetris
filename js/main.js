@@ -5,7 +5,7 @@ import { makeTexture, TEXTURE_NAMES, TYPE_COLORS } from './textures.js';
 import { icon, iconURL } from './icons.js';
 import { Sound } from './audio.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 const PANEL = 5;                       // 右パネルの幅（マス数）
 const DAS = 170, ARR = 50, SOFT_MS = 45;
@@ -66,6 +66,7 @@ function setupStatic() {
   }
   $('#ver').textContent = 'v' + VERSION;
   updateSoundIcon();
+  updateMusicIcon();
 }
 
 // ---------- レイアウト ----------
@@ -358,7 +359,7 @@ function clearFx(rows, bonus) {
   vibrate(30);
   for (const row of rows) {
     addParticle({ x: boardW / 2, y: cy(row.y), w: boardW, h: cell, color: '#ffffff', life: 260, alpha: 0.8 });
-    row.cells.forEach((t, x) => debris(x, row.y, t, 2));
+    row.cells.forEach((t, x) => { if (t !== TNT) debris(x, row.y, t, 2); });
   }
 }
 
@@ -501,6 +502,7 @@ function startGame() {
   phase = 'play';
   showOverlay(null);
   sound.play('start');
+  sound.music.start();
 }
 
 function togglePause() {
@@ -508,16 +510,19 @@ function togglePause() {
     pausedFrom = phase;
     phase = 'paused';
     held.clear();
+    sound.music.stop();
     showOverlay('pause');
   } else if (phase === 'paused') {
     phase = pausedFrom;
     showOverlay(null);
+    sound.music.start();
   }
 }
 
 function gameOver() {
   phase = 'over';
   held.clear();
+  sound.music.stop();
   sound.play('over');
   const isNew = game.score > best;
   if (isNew) {
@@ -545,6 +550,16 @@ function updateSoundIcon() {
   $('#soundIcon').src = iconURL(sound.muted ? 'soundOff' : 'soundOn');
 }
 
+function toggleMusic() {
+  sound.music.setOn(!sound.music.on);
+  if (sound.music.on && ['play', 'fuse', 'fall'].includes(phase)) sound.music.start();
+  updateMusicIcon();
+}
+
+function updateMusicIcon() {
+  $('#musicBtn').classList.toggle('off', !sound.music.on);
+}
+
 function loadBest() {
   try { return Number(localStorage.getItem('best')) || 0; } catch { return 0; }
 }
@@ -559,6 +574,7 @@ function press(act) {
   sound.unlock();
   if (act === 'pause') return togglePause();
   if (act === 'sound') return toggleSound();
+  if (act === 'music') return toggleMusic();
   if (phase !== 'play') return;
   switch (act) {
     case 'left':
@@ -613,7 +629,7 @@ for (const btn of document.querySelectorAll('[data-ui]')) {
 const KEYS = {
   ArrowLeft: 'left', ArrowRight: 'right', ArrowDown: 'down', ArrowUp: 'rotate',
   x: 'rotate', X: 'rotate', z: 'rotateL', Z: 'rotateL', ' ': 'drop',
-  f: 'flint', F: 'flint', Enter: 'flint', p: 'pause', P: 'pause', Escape: 'pause',
+  f: 'flint', F: 'flint', Enter: 'flint', p: 'pause', P: 'pause', Escape: 'pause', m: 'music', M: 'music',
 };
 
 window.addEventListener('keydown', e => {

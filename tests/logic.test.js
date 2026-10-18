@@ -44,13 +44,41 @@ test('1 ライン消すと 100 点', () => {
   assert.ok(g.board[TOTAL_ROWS - 1].every(c => c === null));
 });
 
-test('ライン消去に巻き込まれた TNT はただ消える', () => {
+test('ライン消去では TNT は消えずに残り、上のブロックを支える', () => {
   const g = new Game({ rng: noTnt });
-  fillRow(g, TOTAL_ROWS - 1, 'S', [6, 7, 8, 9]);
-  g.board[TOTAL_ROWS - 1][0] = TNT;
+  const b = TOTAL_ROWS - 1;
+  fillRow(g, b, 'S', [6, 7, 8, 9]);
+  g.board[b][0] = TNT;
+  g.board[b - 1][0] = 'L';   // TNT の上
+  g.board[b - 1][2] = 'J';   // ふつうの列の上
   g.active = { type: 'I', rot: 0, x: 6, y: 5 };
-  g.hardDrop();
-  assert.equal(g.tntCount(), 0);
+  const ev = g.hardDrop();
+  assert.equal(ev.cleared.length, 1);
+  assert.equal(g.tntCount(), 1);
+  assert.equal(g.board[b][0], TNT);
+  assert.equal(g.board[b - 1][0], 'L');
+  assert.equal(g.board[b][2], 'J');
+  assert.equal(g.board[b][1], null);
+});
+
+test('TNT だけでうまった行は消えない', () => {
+  const g = new Game({ rng: noTnt });
+  const b = TOTAL_ROWS - 1;
+  fillRow(g, b, TNT);
+  assert.deepEqual(g.clearLines(), []);
+  assert.equal(g.tntCount(), COLS);
+});
+
+test('下がってまたそろった行は続けて消える', () => {
+  const g = new Game({ rng: noTnt });
+  const b = TOTAL_ROWS - 1;
+  fillRow(g, b, 'S');
+  g.board[b][0] = TNT;
+  fillRow(g, b - 1, 'T', [0]);
+  const cleared = g.clearLines();
+  assert.equal(cleared.length, 2);
+  assert.deepEqual(g.board[b], [TNT, ...Array(COLS - 1).fill(null)]);
+  assert.ok(g.board[b - 1].every(c => c === null));
 });
 
 test('乱数が小さいと TNT が出る', () => {
