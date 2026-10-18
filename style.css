@@ -51,7 +51,7 @@ img { image-rendering: pixelated; pointer-events: none; -webkit-user-drag: none;
   width: calc(var(--cell) * 5);
   display: flex;
   justify-content: center;
-  gap: calc(var(--cell) * 0.3);
+  gap: calc(var(--cell) * 0.2);
 }
 
 /* マイクラのボタン風 */
@@ -83,11 +83,12 @@ img { image-rendering: pixelated; pointer-events: none; -webkit-user-drag: none;
 .mc-btn.down img, .mc-btn:active img { transform: translateY(2px); }
 
 .mc-btn.small {
-  width: calc(var(--cell) * 1.7);
-  height: calc(var(--cell) * 1.7);
+  width: calc(var(--cell) * 1.45);
+  height: calc(var(--cell) * 1.45);
   border-width: 2px;
 }
-.mc-btn.small img { width: 60%; }
+.mc-btn.small img { width: 62%; }
+.mc-btn.off img { opacity: 0.3; }
 
 .mc-btn.wide {
   width: min(72vw, 320px);

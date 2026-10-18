@@ -234,16 +234,27 @@ export class Game {
     return { piece, cleared, points, levelUp: this.level > prevLevel, over: this.over };
   }
 
-  // そろった行を消す。TNT が混ざっていても爆発せずに消えるだけ
+  // そろった行を消す。TNT は消えずにその場に残り、TNT の上に積んだブロックも支えられて残る。
+  // TNT のない列だけ 1 段下がる。下がってまたそろった行は続けて消える（連鎖）。
+  // TNT だけでうまった行は消さない（置くたびに得点が入るのを防ぐ）。
   clearLines() {
     const cleared = [];
-    for (let y = 0; y < TOTAL_ROWS; y++) {
-      if (this.board[y].every(Boolean)) cleared.push({ y, cells: this.board[y].slice() });
-    }
-    if (cleared.length) {
-      const keep = this.board.filter(r => !r.every(Boolean));
-      while (keep.length < TOTAL_ROWS) keep.unshift(emptyRow());
-      this.board = keep;
+    for (;;) {
+      const rows = [];
+      for (let y = 0; y < TOTAL_ROWS; y++) {
+        const row = this.board[y];
+        if (row.every(Boolean) && row.some(c => c !== TNT)) rows.push(y);
+      }
+      if (!rows.length) break;
+      // 上の行から処理すれば、ずれるのはそれより上だけなので下の行の番号は変わらない
+      for (const y of rows) {
+        cleared.push({ y, cells: this.board[y].slice() });
+        for (let x = 0; x < COLS; x++) {
+          if (this.board[y][x] === TNT) continue;
+          for (let yy = y; yy > 0; yy--) this.board[yy][x] = this.board[yy - 1][x];
+          this.board[0][x] = null;
+        }
+      }
     }
     return cleared;
   }
