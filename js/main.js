@@ -6,7 +6,7 @@ import { icon, iconURL } from './icons.js';
 import { Sound } from './audio.js';
 import * as ranking from './ranking.js';
 
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 
 const PANEL = 5;                       // 右パネルの幅（マス数）
 const DAS = 170, ARR = 50, SOFT_MS = 45;
