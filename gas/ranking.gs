@@ -8,6 +8,11 @@ const NAME_MAX = 8;
 const NG_WORDS = ['しね', '死ね', 'ころす', '殺す', 'ころせ', 'きえろ', '消えろ'];
 const HEADER = ['id', 'name', 'score', 'lines', 'level', 'seconds', 'updated'];
 
+// 承認用：スクリプト エディタでこの関数を 1 回実行すると承認画面が出る（シートも作られる）
+function setup() {
+  sheet_();
+}
+
 function doGet(e) {
   const id = String((e && e.parameter && e.parameter.id) || '');
   return json_(Object.assign({ ok: true }, board_(readRows_(), id)));
