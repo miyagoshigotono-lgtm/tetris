@@ -4,8 +4,9 @@ import { Game, COLS, ROWS, HIDDEN, TNT, shapeCells } from './logic.js';
 import { makeTexture, TEXTURE_NAMES, TYPE_COLORS } from './textures.js';
 import { icon, iconURL } from './icons.js';
 import { Sound } from './audio.js';
+import * as ranking from './ranking.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 const PANEL = 5;                       // 右パネルの幅（マス数）
 const DAS = 170, ARR = 50, SOFT_MS = 45;
@@ -25,6 +26,8 @@ let cell = 24, dpr = 1, boardW = 0, W = 0, H = 0;
 let tiles = {}, boardBg = null;
 let particles = [], shake = 0, flash = 0, fuseT = 0, fall = null;
 let best = loadBest();
+let playMs = 0;
+let afterName = null;
 const held = new Map();
 
 // ---------- 画像の準備 ----------
@@ -459,6 +462,7 @@ function repeatAct(act) {
 
 function step(dt) {
   updateParticles(dt);
+  if (['play', 'fuse', 'fall'].includes(phase)) playMs += dt;
   shake = Math.max(0, shake - dt);
   flash = Math.max(0, flash - dt / 180);
   if (phase === 'play') {
@@ -499,6 +503,7 @@ function startGame() {
   fall = null;
   shake = flash = 0;
   held.clear();
+  playMs = 0;
   phase = 'play';
   showOverlay(null);
   sound.play('start');
@@ -532,6 +537,7 @@ function gameOver() {
   $('#overScore').replaceChildren(numberCanvas(game.score, 6, '#ffffff'));
   $('#overBest').replaceChildren(numberCanvas(best, 4, '#ffe066'));
   $('#newBest').hidden = !isNew;
+  sendScore();
   setTimeout(() => { if (phase === 'over') showOverlay('over'); }, 700);
 }
 
@@ -539,6 +545,90 @@ function showTitle() {
   phase = 'title';
   $('#titleBest').replaceChildren(numberCanvas(best, 4, '#ffe066'));
   showOverlay('title');
+  if (!ranking.enabled()) return;
+  updateNameLabel();
+  const el = $('#rankTitle');
+  rankMessage(el, 'よみこみちゅう…');
+  ranking.flushPending().catch(() => {})
+    .then(() => ranking.fetchRanking())
+    .then(data => renderRanking(el, data))
+    .catch(() => rankMessage(el, 'ランキングに つながりません'));
+}
+
+// ---------- ランキング ----------
+
+function sendScore() {
+  const el = $('#overRank');
+  if (!ranking.enabled() || !ranking.getName() || game.score <= 0) {
+    el.hidden = true;
+    return;
+  }
+  rankMessage(el, 'おくっています…');
+  ranking.submitScore({
+    score: game.score, lines: game.lines, level: game.level, seconds: Math.max(1, Math.round(playMs / 1000)),
+  })
+    .then(data => renderRanking(el, data))
+    .catch(() => rankMessage(el, 'あとで おくります'));
+}
+
+function rankMessage(el, text) {
+  const msg = document.createElement('div');
+  msg.className = 'rank-msg';
+  msg.textContent = text;
+  el.replaceChildren(msg);
+  el.hidden = false;
+}
+
+function renderRanking(el, data) {
+  const head = document.createElement('div');
+  head.className = 'rank-head';
+  head.textContent = data.rank ? `ランキング  ${data.rank}い / ${data.total}にん` : 'ランキング';
+  const rows = data.top.map((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'rank-row' + (i + 1 === data.rank ? ' me' : '');
+    for (const [cls, text] of [['no', i + 1], ['nm', r.name], ['sc', r.score.toLocaleString('ja-JP')]]) {
+      const span = document.createElement('span');
+      span.className = cls;
+      span.textContent = text;
+      row.append(span);
+    }
+    return row;
+  });
+  el.replaceChildren(head, ...rows);
+  if (!rows.length) rankMessage(el, 'まだ だれも いません');
+  el.hidden = false;
+}
+
+function updateNameLabel() {
+  $('#nameBtn').hidden = false;
+  $('#nameLabel').textContent = ranking.getName() || 'なまえを いれる';
+}
+
+function openName(then) {
+  afterName = then;
+  const input = $('#nameInput');
+  input.value = ranking.getName();
+  showOverlay('nameDlg');
+  input.focus();
+}
+
+function closeName(ok) {
+  if (ok) {
+    const n = ranking.cleanName($('#nameInput').value);
+    if (!n) return;
+    ranking.setName(n);
+  }
+  $('#nameInput').blur();
+  const then = afterName;
+  afterName = null;
+  if (then === 'start' && ok) startGame();
+  else showTitle();
+}
+
+// 名前がまだなら最初に聞く（「あとで」を選べばランキングなしで遊べる）
+function requestStart() {
+  if (ranking.enabled() && !ranking.getName() && phase === 'title') openName('start');
+  else startGame();
 }
 
 function toggleSound() {
@@ -618,7 +708,10 @@ for (const btn of document.querySelectorAll('[data-act]')) {
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(ev, up);
 }
 
-const UI = { start: startGame, resume: togglePause, restart: startGame };
+const UI = {
+  start: requestStart, resume: togglePause, restart: startGame,
+  name: () => openName('title'), nameOk: () => closeName(true), nameSkip: () => closeName(false),
+};
 for (const btn of document.querySelectorAll('[data-ui]')) {
   btn.addEventListener('click', () => {
     sound.unlock();
@@ -633,10 +726,14 @@ const KEYS = {
 };
 
 window.addEventListener('keydown', e => {
+  if (e.target instanceof HTMLInputElement) {
+    if (e.key === 'Enter' && !e.isComposing) closeName(true);
+    return;
+  }
   const menu = ['title', 'over'].find(id => !$('#' + id).hidden);
   if (menu && (e.key === ' ' || e.key === 'Enter')) {
     e.preventDefault();
-    startGame();
+    requestStart();
     return;
   }
   const act = KEYS[e.key];
@@ -645,6 +742,7 @@ window.addEventListener('keydown', e => {
   if (!e.repeat) press(act);
 });
 window.addEventListener('keyup', e => {
+  if (e.target instanceof HTMLInputElement) return;
   const act = KEYS[e.key];
   if (act) release(act);
 });
@@ -653,7 +751,7 @@ window.addEventListener('blur', () => held.clear());
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && ['play', 'fuse', 'fall'].includes(phase)) togglePause();
 });
-document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('contextmenu', e => { if (!(e.target instanceof HTMLInputElement)) e.preventDefault(); });
 document.addEventListener('gesturestart', e => e.preventDefault());
 document.addEventListener('dblclick', e => e.preventDefault());
 

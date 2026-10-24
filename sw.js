@@ -5,6 +5,7 @@ const CACHE = 'block-otoshi-v1';
 const ASSETS = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
   'js/main.js', 'js/logic.js', 'js/textures.js', 'js/icons.js', 'js/audio.js',
+  'js/ranking.js', 'js/config.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 const TIMEOUT_MS = 4000;
