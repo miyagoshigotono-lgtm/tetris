@@ -146,10 +146,14 @@ img { image-rendering: pixelated; pointer-events: none; -webkit-user-drag: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 22px;
-  padding: 20px;
+  justify-content: safe center;
+  gap: 18px;
+  padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
   background: rgba(0, 0, 0, 0.8);
+  overflow-y: auto;
+  touch-action: pan-y;
 }
+.overlay > * { flex-shrink: 0; }
 #title { background: #2a1d12 var(--dirt) repeat; background-size: 64px 64px; }
 
 .logo {
@@ -191,3 +195,58 @@ img { image-rendering: pixelated; pointer-events: none; -webkit-user-drag: none;
 }
 
 .ver { font: 12px monospace; color: rgba(255, 255, 255, 0.5); }
+
+/* ランキング */
+.rank-panel {
+  width: min(88vw, 360px);
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 3px solid #000;
+  box-shadow: inset 0 0 0 2px #5a5a5a;
+  font: 700 15px/1.35 system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
+}
+.rank-head { margin-bottom: 4px; text-align: center; color: #ffe066; font-size: 14px; }
+.rank-row { display: flex; gap: 10px; padding: 1px 6px; }
+.rank-row .no { width: 1.6em; text-align: right; color: #9a9a9a; }
+.rank-row:nth-child(2) .no { color: #ffd83d; }
+.rank-row:nth-child(3) .no { color: #d8d8d8; }
+.rank-row:nth-child(4) .no { color: #d08a4a; }
+.rank-row .nm { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.rank-row .sc { font-family: ui-monospace, Menlo, monospace; }
+.rank-row.me { background: rgba(255, 224, 102, 0.22); color: #ffe066; }
+.rank-msg { text-align: center; color: #bbbbbb; }
+
+.mc-btn.name-btn, .mc-btn.text-btn {
+  min-width: min(60vw, 240px);
+  height: 48px;
+  padding: 0 16px;
+  gap: 10px;
+  font: 700 18px/1 system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55);
+}
+.name-btn .pen { color: #ffe066; }
+
+.dlg-title { font-size: 32px; font-weight: 900; text-shadow: 0 3px 0 #000; }
+.dlg-note { font-size: 14px; color: #cccccc; text-align: center; }
+#nameInput {
+  width: min(80vw, 320px);
+  height: 56px;
+  padding: 0 14px;
+  border: 3px solid #a0a0a0;
+  border-radius: 0;
+  background: #000;
+  color: #fff;
+  font: 700 24px/1 system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  text-align: center;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: manipulation;
+}
+#nameInput:focus { border-color: #ffffff; }
+
+@media (max-height: 760px) {
+  .logo { font-size: clamp(34px, 10vw, 60px); }
+  .block-row img { width: clamp(24px, 7vw, 34px); }
+  .mc-btn.wide { height: 60px; }
+}
