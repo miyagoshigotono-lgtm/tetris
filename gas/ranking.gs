@@ -1,21 +1,28 @@
 // ブロックおとし ランキング（Google Apps Script・スプレッドシートに紐づけて使う）
-// 1 人（端末）1 行で自己ベストだけを残す。シートは初回に自動で作られる。
+// ・歴代（ranking シート）：1 人（端末）1 行で自己ベスト
+// ・今週（weekly シート）：1 人 1 週 1 行で、その週の自己ベスト。月曜 0 時（日本時間）で新しい週になる
+// 記録は消さないので、過去の週もシートに残る。シートは必要になった時に自動で作られる。
 // 設定のしかたは README の「ランキング」を参照。
 
 const SHEET_NAME = 'ranking';
+const WEEKLY_SHEET = 'weekly';
 const TOP_N = 10;
 const NAME_MAX = 8;
 const NG_WORDS = ['しね', '死ね', 'ころす', '殺す', 'ころせ', 'きえろ', '消えろ'];
 const HEADER = ['id', 'name', 'score', 'lines', 'level', 'seconds', 'updated'];
+const WEEKLY_HEADER = ['id', 'week', 'name', 'score', 'lines', 'level', 'seconds', 'updated'];
+const JST_MS = 9 * 3600 * 1000;
+const DAY_MS = 24 * 3600 * 1000;
 
 // 承認用：スクリプト エディタでこの関数を 1 回実行すると承認画面が出る（シートも作られる）
 function setup() {
   sheet_();
+  weeklySheet_();
 }
 
 function doGet(e) {
   const id = String((e && e.parameter && e.parameter.id) || '');
-  return json_(Object.assign({ ok: true }, board_(readRows_(), id)));
+  return json_(Object.assign({ ok: true }, boards_(id)));
 }
 
 function doPost(e) {
@@ -31,27 +38,32 @@ function doPost(e) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const sh = sheet_();
-    const values = sh.getDataRange().getValues();
-    let idx = -1;
-    for (let i = 1; i < values.length; i++) {
-      if (String(values[i][0]) === v.id) {
-        idx = i;
-        break;
-      }
-    }
-    const now = new Date();
-    if (idx < 0) {
-      sh.appendRow([v.id, v.name, v.score, v.lines, v.level, v.seconds, now]);
-    } else if (v.score > Number(values[idx][2])) {
-      sh.getRange(idx + 1, 2, 1, 6).setValues([[v.name, v.score, v.lines, v.level, v.seconds, now]]);
-    } else if (String(values[idx][1]) !== v.name) {
-      sh.getRange(idx + 1, 2).setValue(v.name);   // 名前だけ変えた
-    }
+    const now = now_();
+    upsertBest_(sheet_(), v, null, now);
+    upsertBest_(weeklySheet_(), v, weekOf_(now).key, now);
   } finally {
     lock.releaseLock();
   }
-  return json_(Object.assign({ ok: true }, board_(readRows_(), v.id)));
+  return json_(Object.assign({ ok: true }, boards_(v.id)));
+}
+
+// 同じ人（今週分なら同じ週）の行があれば、点数が上回った時だけ書き換える。名前だけの変更も反映する。
+// 歴代：id, name, score, …  今週：id, week, name, score, …（week の 1 列だけ右にずれる）
+function upsertBest_(sh, v, week, now) {
+  const head = week === null ? [] : [week];
+  const nameCol = head.length + 1;   // 0 始まりの列番号
+  const values = head.concat([v.name, v.score, v.lines, v.level, v.seconds, now]);
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== v.id || (week !== null && String(rows[i][1]) !== week)) continue;
+    if (v.score > Number(rows[i][nameCol + 1])) {
+      sh.getRange(i + 1, 2, 1, values.length).setValues([values]);
+    } else if (String(rows[i][nameCol]) !== v.name) {
+      sh.getRange(i + 1, nameCol + 1).setValue(v.name);
+    }
+    return;
+  }
+  sh.appendRow([v.id].concat(values));
 }
 
 // ありえない記録をはじく（完全には防げないので、最後はシートの行を消す）
@@ -77,6 +89,19 @@ function cleanName_(raw) {
   return n;
 }
 
+function now_() {
+  return new Date();
+}
+
+// 日本時間の月曜 0 時から始まる週。key は日付として変換されないよう W を付けた文字列
+function weekOf_(date) {
+  const jst = new Date(date.getTime() + JST_MS);
+  const sinceMon = (jst.getUTCDay() + 6) % 7;
+  const start = Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate() - sinceMon) - JST_MS;
+  const key = 'W' + new Date(start + JST_MS).toISOString().slice(0, 10);
+  return { key, start, end: start + 7 * DAY_MS };
+}
+
 function sheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(SHEET_NAME);
@@ -89,17 +114,42 @@ function sheet_() {
   return sh;
 }
 
-function readRows_() {
-  return sheet_().getDataRange().getValues().slice(1)
+// 初めて作る時は、歴代の記録のうち今週更新されたものを今週分として写す
+function weeklySheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(WEEKLY_SHEET);
+  if (!sh) {
+    try {
+      sh = ss.insertSheet(WEEKLY_SHEET);
+    } catch (err) {
+      return ss.getSheetByName(WEEKLY_SHEET);   // 同時に作られた
+    }
+    sh.appendRow(WEEKLY_HEADER);
+    sh.setFrozenRows(1);
+    sh.getRange('B:C').setNumberFormat('@');
+    const w = weekOf_(now_());
+    sheet_().getDataRange().getValues().slice(1)
+      .filter(r => r[0] !== '' && new Date(r[6]).getTime() >= w.start)
+      .forEach(r => sh.appendRow([r[0], w.key, r[1], r[2], r[3], r[4], r[5], r[6]]));
+  }
+  return sh;
+}
+
+function readAll_() {
+  return sort_(sheet_().getDataRange().getValues().slice(1)
     .filter(r => r[0] !== '' && r[0] != null)
-    .map(r => ({
-      id: String(r[0]),
-      name: String(r[1]),
-      score: Number(r[2]) || 0,
-      level: Number(r[4]) || 1,
-      updated: new Date(r[6]).getTime() || 0,
-    }))
-    .sort((a, b) => b.score - a.score || a.updated - b.updated);
+    .map(r => ({ id: String(r[0]), name: String(r[1]), score: Number(r[2]) || 0, level: Number(r[4]) || 1, updated: r[6] })));
+}
+
+function readWeek_(key) {
+  return sort_(weeklySheet_().getDataRange().getValues().slice(1)
+    .filter(r => r[0] !== '' && r[0] != null && String(r[1]) === key)
+    .map(r => ({ id: String(r[0]), name: String(r[2]), score: Number(r[3]) || 0, level: Number(r[5]) || 1, updated: r[7] })));
+}
+
+function sort_(rows) {
+  rows.forEach(r => { r.updated = new Date(r.updated).getTime() || 0; });
+  return rows.sort((a, b) => b.score - a.score || a.updated - b.updated);
 }
 
 // id はほかの人に見せない
@@ -110,6 +160,16 @@ function board_(rows, id) {
     rank,
     total: rows.length,
   };
+}
+
+// top / rank / total は今週分（v1.3.0 までのゲームはここだけを読む）
+function boards_(id) {
+  const w = weekOf_(now_());
+  const week = board_(readWeek_(w.key), id);
+  return Object.assign({}, week, {
+    week: Object.assign({ key: w.key, endsAt: w.end }, week),
+    all: board_(readAll_(), id),
+  });
 }
 
 function json_(obj) {

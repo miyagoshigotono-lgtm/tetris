@@ -6,7 +6,7 @@ import { icon, iconURL } from './icons.js';
 import { Sound } from './audio.js';
 import * as ranking from './ranking.js';
 
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 
 const PANEL = 5;                       // 右パネルの幅（マス数）
 const DAS = 170, ARR = 50, SOFT_MS = 45;
@@ -537,7 +537,7 @@ function gameOver() {
   $('#overScore').replaceChildren(numberCanvas(game.score, 6, '#ffffff'));
   $('#overBest').replaceChildren(numberCanvas(best, 4, '#ffe066'));
   $('#newBest').hidden = !isNew;
-  sendScore();
+  sendScore(isNew);
   setTimeout(() => { if (phase === 'over') showOverlay('over'); }, 700);
 }
 
@@ -557,17 +557,19 @@ function showTitle() {
 
 // ---------- ランキング ----------
 
-function sendScore() {
+// 自己ベストを更新した時だけ「れきだい ◯い！」を出す
+function sendScore(isNew) {
   const el = $('#overRank');
   if (!ranking.enabled() || !ranking.getName() || game.score <= 0) {
     el.hidden = true;
     return;
   }
+  el.dataset.tab = 'week';
   rankMessage(el, 'おくっています…');
   ranking.submitScore({
     score: game.score, lines: game.lines, level: game.level, seconds: Math.max(1, Math.round(playMs / 1000)),
   })
-    .then(data => renderRanking(el, data))
+    .then(data => renderRanking(el, data, { badge: isNew }))
     .catch(() => rankMessage(el, 'あとで おくります'));
 }
 
@@ -579,24 +581,73 @@ function rankMessage(el, text) {
   el.hidden = false;
 }
 
-function renderRanking(el, data) {
+// 新しい形（week / all）の返事なら「こんしゅう」「れきだい」を切り替えて見せる
+function renderRanking(el, data, opts = {}) {
+  el._rank = { data, opts };
+  const tabbed = Boolean(data.week && data.all);
+  const tab = tabbed ? (el.dataset.tab || 'week') : null;
+  const board = tabbed ? data[tab] : data;
+  const nodes = [];
+
+  if (tabbed && opts.badge && data.all.rank && data.all.rank <= 10) {
+    const badge = document.createElement('div');
+    badge.className = 'rank-badge';
+    badge.textContent = `れきだい ${data.all.rank}い！`;
+    nodes.push(badge);
+  }
+  if (tabbed) {
+    const tabs = document.createElement('div');
+    tabs.className = 'rank-tabs';
+    for (const [key, label] of [['week', 'こんしゅう'], ['all', 'れきだい']]) {
+      const b = document.createElement('button');
+      b.className = 'rank-tab' + (key === tab ? ' on' : '');
+      b.dataset.tab = key;
+      b.textContent = label;
+      tabs.append(b);
+    }
+    nodes.push(tabs);
+  }
+
   const head = document.createElement('div');
   head.className = 'rank-head';
-  head.textContent = data.rank ? `ランキング  ${data.rank}い / ${data.total}にん` : 'ランキング';
-  const rows = data.top.map((r, i) => {
+  let text = board.rank ? `${board.rank}い / ${board.total}にん` : `${board.total}にん`;
+  if (!tabbed) text = 'ランキング  ' + text;
+  if (tab === 'week') text += `  ・  リセットまで あと${daysLeft(data.week.endsAt)}にち`;
+  head.textContent = text;
+  nodes.push(head);
+
+  board.top.forEach((r, i) => {
     const row = document.createElement('div');
-    row.className = 'rank-row' + (i + 1 === data.rank ? ' me' : '');
-    for (const [cls, text] of [['no', i + 1], ['nm', r.name], ['sc', r.score.toLocaleString('ja-JP')]]) {
+    row.className = `rank-row r${i + 1}` + (i + 1 === board.rank ? ' me' : '');
+    for (const [cls, t] of [['no', i + 1], ['nm', r.name], ['sc', r.score.toLocaleString('ja-JP')]]) {
       const span = document.createElement('span');
       span.className = cls;
-      span.textContent = text;
+      span.textContent = t;
       row.append(span);
     }
-    return row;
+    nodes.push(row);
   });
-  el.replaceChildren(head, ...rows);
-  if (!rows.length) rankMessage(el, 'まだ だれも いません');
+  if (!board.top.length) {
+    const msg = document.createElement('div');
+    msg.className = 'rank-msg';
+    msg.textContent = 'まだ だれも いません';
+    nodes.push(msg);
+  }
+  el.replaceChildren(...nodes);
   el.hidden = false;
+}
+
+function daysLeft(endsAt) {
+  return Math.max(1, Math.ceil((endsAt - Date.now()) / 86400000));
+}
+
+for (const el of document.querySelectorAll('.rank-panel')) {
+  el.addEventListener('click', e => {
+    const b = e.target.closest('[data-tab]');
+    if (!b || !el._rank) return;
+    el.dataset.tab = b.dataset.tab;
+    renderRanking(el, el._rank.data, el._rank.opts);
+  });
 }
 
 function updateNameLabel() {
