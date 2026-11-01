@@ -208,13 +208,41 @@ img { image-rendering: pixelated; pointer-events: none; -webkit-user-drag: none;
 .rank-head { margin-bottom: 4px; text-align: center; color: #ffe066; font-size: 14px; }
 .rank-row { display: flex; gap: 10px; padding: 1px 6px; }
 .rank-row .no { width: 1.6em; text-align: right; color: #9a9a9a; }
-.rank-row:nth-child(2) .no { color: #ffd83d; }
-.rank-row:nth-child(3) .no { color: #d8d8d8; }
-.rank-row:nth-child(4) .no { color: #d08a4a; }
+.rank-row.r1 .no { color: #ffd83d; }
+.rank-row.r2 .no { color: #d8d8d8; }
+.rank-row.r3 .no { color: #d08a4a; }
 .rank-row .nm { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .rank-row .sc { font-family: ui-monospace, Menlo, monospace; }
 .rank-row.me { background: rgba(255, 224, 102, 0.22); color: #ffe066; }
 .rank-msg { text-align: center; color: #bbbbbb; }
+.rank-tabs { display: flex; gap: 6px; margin-bottom: 6px; }
+.rank-tab {
+  flex: 1;
+  height: 36px;
+  padding: 0;
+  border: 2px solid #000;
+  border-radius: 0;
+  background: #3d3d3d;
+  color: #aaaaaa;
+  box-shadow: inset 2px 2px 0 #555555, inset -2px -2px 0 #2a2a2a;
+  font: 700 16px/1 system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  cursor: pointer;
+}
+.rank-tab.on {
+  background: #7a7a7a;
+  color: #ffffff;
+  box-shadow: inset 2px 2px 0 #b0b0b0, inset -2px -2px 0 #4f4f4f;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+}
+.rank-badge {
+  margin-bottom: 6px;
+  text-align: center;
+  color: #80ff20;
+  font-size: 20px;
+  font-weight: 900;
+  text-shadow: 0 2px 0 #1a3d00;
+  animation: glow 0.5s ease-in-out infinite alternate;
+}
 
 .mc-btn.name-btn, .mc-btn.text-btn {
   min-width: min(60vw, 240px);
